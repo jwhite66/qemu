@@ -168,8 +168,8 @@ static int check_atr(PassthruState *card, uint8_t *data, int len)
             opt_bytes++;
         }
         if (td & 0x8) {
-            opt_bytes++;
             td = data[opt_bytes + 2] >> 4;
+            opt_bytes++;
         }
     }
     if (len < 2 + historical_length + opt_bytes) {
