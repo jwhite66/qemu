@@ -304,6 +304,7 @@ trace_file="trace"
 spice=""
 rbd=""
 smartcard_nss=""
+smartcard_pcsc=""
 libusb=""
 usb_redir=""
 opengl=""
@@ -1044,6 +1045,10 @@ for opt do
   ;;
   --enable-smartcard-nss) smartcard_nss="yes"
   ;;
+  --disable-smartcard-pcsc) smartcard_pcsc="no"
+  ;;
+  --enable-smartcard-pcsc) smartcard_pcsc="yes"
+  ;;
   --disable-libusb) libusb="no"
   ;;
   --enable-libusb) libusb="yes"
@@ -1352,6 +1357,7 @@ disabled with --disable-FEATURE, default is enabled if available:
   libiscsi        iscsi support
   libnfs          nfs support
   smartcard-nss   smartcard nss support
+  smartcard-pcsc  smartcard passthru support
   libusb          libusb (for usb passthrough)
   usb-redir       usb network redirection support
   lzo             support of lzo compression library
@@ -3797,6 +3803,30 @@ EOF
     fi
 fi
 
+# check for pcsclite for smartcard passthru support
+# TODO - Add support for Winscard
+if test "$smartcard_pcsc" != "no"; then
+  cat > $TMPC << EOF
+#include <winscard.h>
+int main(void) { SCardEstablishContext(0, 0, 0, 0); return 0; }
+EOF
+    pcsc_libs="$($pkg_config --libs libpcsclite 2>/dev/null)"
+    pcsc_cflags="$($pkg_config --cflags libpcsclite 2>/dev/null)"
+    test_cflags="$pcsc_cflags"
+    if test "$werror" = "yes"; then
+        test_cflags="-Werror $test_cflags"
+    fi
+    if test -n "$libtool" &&
+      compile_prog "$test_cflags" "$pcsc_libs"; then
+        smartcard_pcsc="yes"
+    else
+        if test "$smartcard_pcsc" = "yes"; then
+            feature_not_found "pcsc" "Install libpcsclite"
+        fi
+        smartcard_pcsc="no"
+    fi
+fi
+
 # check for libusb
 if test "$libusb" != "no" ; then
     if $pkg_config --atleast-version=1.0.13 libusb-1.0; then
@@ -4569,6 +4599,7 @@ fi
 echo "rbd support       $rbd"
 echo "xfsctl support    $xfs"
 echo "nss used          $smartcard_nss"
+echo "pcsc used         $smartcard_pcsc"
 echo "libusb            $libusb"
 echo "usb net redir     $usb_redir"
 echo "OpenGL support    $opengl"
@@ -4946,6 +4977,12 @@ if test "$smartcard_nss" = "yes" ; then
   echo "CONFIG_SMARTCARD_NSS=y" >> $config_host_mak
   echo "NSS_LIBS=$nss_libs" >> $config_host_mak
   echo "NSS_CFLAGS=$nss_cflags" >> $config_host_mak
+fi
+
+if test "$smartcard_pcsc" = "yes" ; then
+  echo "CONFIG_SMARTCARD_PCSC=y" >> $config_host_mak
+  echo "PCSC_LIBS=$pcsc_libs" >> $config_host_mak
+  echo "PCSC_CFLAGS=$pcsc_cflags" >> $config_host_mak
 fi
 
 if test "$libusb" = "yes" ; then
