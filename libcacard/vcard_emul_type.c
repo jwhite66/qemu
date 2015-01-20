@@ -9,6 +9,7 @@
  */
 
 #include <strings.h>
+#include "config-host.h"
 #include "vcardt.h"
 #include "vcard_emul_type.h"
 #include "cac.h"
@@ -48,7 +49,7 @@ VCardEmulType vcard_emul_type_from_string(const char *type_string)
      if (strcasecmp(type_string, "CAC") == 0) {
         return VCARD_EMUL_CAC;
      }
-#ifdef USE_PASSTHRU
+#ifdef CONFIG_SMARTCARD_PCSC
      if (strcasecmp(type_string, "PASSTHRU") == 0) {
         return VCARD_EMUL_PASSTHRU;
      }

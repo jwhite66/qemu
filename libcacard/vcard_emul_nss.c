@@ -25,6 +25,7 @@
 #include <prthread.h>
 #include <secerr.h>
 
+#include "config-host.h"
 #include "glib-compat.h"
 
 #include "vcard.h"
@@ -34,6 +35,9 @@
 #include "vevent.h"
 
 #include "vcardt_internal.h"
+#if defined(CONFIG_SMARTCARD_PCSC)
+#include "capcsc.h"
+#endif
 
 
 typedef enum {
@@ -892,6 +896,23 @@ vcard_emul_init(const VCardEmulOptions *options)
         options = &default_options;
     }
 
+#if defined(CONFIG_SMARTCARD_PCSC)
+    if (options->use_hw && options->hw_card_type == VCARD_EMUL_PASSTHRU) {
+        if (options->vreader_count > 0) {
+            fprintf(stderr, "Error: you cannot use a soft card and "
+                            "a passthru card simultaneously.\n");
+            return VCARD_EMUL_FAIL;
+        }
+
+        if (capcsc_init()) {
+            fprintf(stderr, "Error initializing PCSC interface.\n");
+            return VCARD_EMUL_FAIL;
+        }
+
+        return VCARD_EMUL_OK;
+    }
+#endif
+
     /* first initialize NSS */
     if (options->nss_db) {
         rv = NSS_Init(options->nss_db);
@@ -1297,5 +1318,11 @@ vcard_emul_usage(void)
 "hw_type, and parameters of hw_param.\n"
 "\n"
 "If more one or more soft= parameters are specified, these readers will be\n"
-"presented to the guest\n");
+"presented to the guest\n"
+#if defined(CONFIG_SMARTCARD_PCSC)
+"\n"
+"If a hw_type of PASSTHRU is given, a connection will be made to the hardware\n"
+"using libpcscslite.  Note that in that case, no soft cards are permitted.\n"
+#endif
+);
 }
