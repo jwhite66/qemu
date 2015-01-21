@@ -1113,17 +1113,13 @@ static VCardEmulOptions options;
  * and its length in "token_length". "token" will not be nul-terminated.
  * After calling the macro, "args" will be advanced to the beginning of
  * the next token.
- * This macro may call continue or break.
  */
 #define NEXT_TOKEN(token) \
             (token) = args; \
             args = strpbrk(args, ",)"); \
-            if (*args == 0) { \
-                break; \
-            } \
-            if (*args == ')') { \
-                args++; \
-                continue; \
+            if (*args == 0 || *args == ')') { \
+                fprintf(stderr, "Error: invalid soft specification.\n"); \
+                return NULL; \
             } \
             (token##_length) = args - (token); \
             args = strip(args+1);
@@ -1141,6 +1137,7 @@ vcard_emul_options(const char *args)
     do {
         args = strip(args); /* strip off the leading spaces */
         if (*args == ',') {
+            args++;
             continue;
         }
         /* soft=(slot_name,virt_name,emul_type,emul_flags,cert_1, (no eol)
@@ -1159,7 +1156,8 @@ vcard_emul_options(const char *args)
 
             args = strip(args + 5);
             if (*args != '(') {
-                continue;
+                fprintf(stderr, "Error: invalid soft specification.\n");
+                return NULL;
             }
             args = strip(args+1);
 
@@ -1170,11 +1168,17 @@ vcard_emul_options(const char *args)
             memcpy(type_str, type_params, type_params_length);
             type_str[type_params_length] = '\0';
             type = vcard_emul_type_from_string(type_str);
+            if (type == VCARD_EMUL_NONE) {
+                fprintf(stderr, "Error: invalid smartcard type '%s'.\n",
+                        type_str);
+                return NULL;
+            }
 
             NEXT_TOKEN(type_params)
 
             if (*args == 0) {
-                break;
+                fprintf(stderr, "Error: missing cert specification.\n");
+                return NULL;
             }
 
             if (opts->vreader_count >= reader_count) {
@@ -1214,6 +1218,11 @@ vcard_emul_options(const char *args)
         } else if (strncmp(args, "hw_type=", 8) == 0) {
             args = strip(args+8);
             opts->hw_card_type = vcard_emul_type_from_string(args);
+            if (opts->hw_card_type == VCARD_EMUL_NONE) {
+                fprintf(stderr, "Error: invalid smartcard type '%s'.\n",
+                        args);
+                return NULL;
+            }
             args = find_blank(args);
         /* hw_params= */
         } else if (strncmp(args, "hw_params=", 10) == 0) {
@@ -1227,7 +1236,8 @@ vcard_emul_options(const char *args)
             const char *db;
             args = strip(args+3);
             if (*args != '"') {
-                continue;
+                fprintf(stderr, "Error: you must quote the file path.\n");
+                return NULL;
             }
             args++;
             db = args;
@@ -1236,8 +1246,21 @@ vcard_emul_options(const char *args)
             if (*args != 0) {
                 args++;
             }
+        } else if (strncmp(args, "nssemul", 7) == 0) {
+            opts->hw_card_type = VCARD_EMUL_CAC;
+            opts->use_hw = PR_TRUE;
+            args = find_blank(args + 7);
+        /* nssemul */
+#if defined(CONFIG_SMARTCARD_PCSC)
+        } else if (strncmp(args, "passthru", 8) == 0) {
+            opts->hw_card_type = VCARD_EMUL_PASSTHRU;
+            opts->use_hw = PR_TRUE;
+            args = find_blank(args + 8);
+        /* passthru */
+#endif
         } else {
-            args = find_blank(args);
+            fprintf(stderr, "Error: Unknown smartcard specification.\n");
+            return NULL;
         }
     } while (*args != 0);
 
@@ -1253,6 +1276,10 @@ vcard_emul_usage(void)
 " use_hw=[yes|no]                 (default yes)\n"
 " hw_type={card_type_to_emulate}  (default CAC)\n"
 " hw_param={param_for_card}       (default \"\")\n"
+" nssemul                         (alias for use_hw=yes, hw_type=CAC)\n"
+#if defined(CONFIG_SMARTCARD_PCSC)
+" passthru                        (alias for use_hw=yes, hw_type=PASSTHRU)\n"
+#endif
 " soft=({slot_name},{vreader_name},{card_type_to_emulate},{params_for_card},\n"
 "       {cert1},{cert2},{cert3}    (default none)\n"
 "\n"
